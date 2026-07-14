@@ -1,11 +1,3 @@
-const fallbackAccounts = [
-  { login: "forge_alpha", balanceWithPercent: "124 500 ₽ +18.4%" },
-  { login: "capital_prime", balanceWithPercent: "98 750 ₽ +11.2%" },
-  { login: "north_engineer", balanceWithPercent: "76 840 ₽ +7.9%" },
-  { login: "vault_sigma", balanceWithPercent: "142 300 ₽ +21.6%" },
-  { login: "iron_delta", balanceWithPercent: "53 620 ₽ -2.3%" }
-];
-
 const state = {
   accounts: [],
   page: 0,
@@ -20,7 +12,8 @@ const prevBtn = document.querySelector("#prevBtn");
 const nextBtn = document.querySelector("#nextBtn");
 
 const numberFormatter = new Intl.NumberFormat("ru-RU", {
-  maximumFractionDigits: 0
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
 });
 
 function normalizeNumber(value) {
@@ -34,25 +27,37 @@ function normalizeNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function extractBalance(value) {
-  if (typeof value === "number") return value;
-  const match = String(value ?? "").match(/[-+]?\d[\d\s.,]*/);
-  return match ? normalizeNumber(match[0]) : 0;
-}
-
 function normalizeAccount(row) {
+  const baseBalance =
+    row.balance ??
+    row.Balance ??
+    row["Баланс"] ??
+    row["баланс"] ??
+    0;
   const balanceWithPercent =
     row.balanceWithPercent ??
     row.BalanceWithPercent ??
     row["Баланс с процентами"] ??
     row["баланс с процентами"] ??
-    "";
+    0;
+
+  const balance = normalizeNumber(baseBalance);
+  const currentBalance = normalizeNumber(balanceWithPercent);
 
   return {
     login: String(row.login ?? row.Login ?? row["Логин"] ?? "").trim(),
-    balanceWithPercent: String(balanceWithPercent).trim(),
-    balance: extractBalance(balanceWithPercent)
+    balance,
+    balanceWithPercent: currentBalance,
+    earned: currentBalance - balance
   };
+}
+
+function shouldShowAccount(account) {
+  return (
+    account.login !== "" &&
+    account.login.toLocaleLowerCase("ru-RU") !== "зарплата" &&
+    account.balanceWithPercent !== 0
+  );
 }
 
 function getPerPage() {
@@ -81,9 +86,10 @@ function renderCards() {
       return `
         <article class="account-card">
           <p class="account-label">Логин</p>
-          <h2 class="login">${escapeHtml(account.login || "Без логина")}</h2>
-          <p class="account-label">Баланс с процентами</p>
-          <p class="balance">${escapeHtml(account.balanceWithPercent || "0")}</p>
+          <h2 class="login">${escapeHtml(account.login)}</h2>
+          <p class="account-label">Текущий баланс</p>
+          <p class="balance">${formatNumber(account.balanceWithPercent)}</p>
+          <p class="earned">уже заработано: <strong>${formatSignedNumber(account.earned)}</strong></p>
         </article>
       `;
     })
@@ -91,19 +97,17 @@ function renderCards() {
 }
 
 function renderTotal() {
-  const total = state.accounts.reduce((sum, account) => sum + account.balance, 0);
-  totalBalance.textContent = formatTotal(total);
+  const total = state.accounts.reduce((sum, account) => sum + account.balanceWithPercent, 0);
+  totalBalance.textContent = formatNumber(total);
 }
 
-function formatTotal(total) {
-  const sample = state.accounts.find((account) => account.balanceWithPercent)?.balanceWithPercent ?? "";
-  const currency = String(sample).match(/₽|руб\.?|RUB|\$|USD|€|EUR/i)?.[0]?.toLowerCase();
-  const value = numberFormatter.format(total);
+function formatNumber(value) {
+  return numberFormatter.format(value);
+}
 
-  if (!currency) return value;
-  if (currency === "$" || currency === "usd") return `$${value}`;
-  if (currency === "€" || currency === "eur") return `€${value}`;
-  return `${value} ₽`;
+function formatSignedNumber(value) {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${formatNumber(Math.abs(value))}`;
 }
 
 function renderDots() {
@@ -147,8 +151,8 @@ async function loadAccounts() {
   const apiUrl = window.FORGE_CONFIG?.apiUrl?.trim();
 
   if (!apiUrl) {
-    state.accounts = fallbackAccounts;
-    setStatus("Демо-данные");
+    state.accounts = [];
+    setStatus("Источник не настроен", true);
     render();
     return;
   }
@@ -159,11 +163,12 @@ async function loadAccounts() {
     const payload = await response.json();
     if (payload.error) throw new Error(payload.error);
     const rows = Array.isArray(payload) ? payload : payload.accounts;
-    state.accounts = rows.map(normalizeAccount).filter((row) => row.login);
+    if (!Array.isArray(rows)) throw new Error("Неверный формат API");
+    state.accounts = rows.map(normalizeAccount).filter(shouldShowAccount);
     setStatus("Данные обновлены");
   } catch (error) {
     console.error(error);
-    state.accounts = fallbackAccounts;
+    state.accounts = [];
     setStatus("Ошибка API", true);
   }
 

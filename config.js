@@ -1,3 +1,3 @@
 window.FORGE_CONFIG = {
-  apiUrl: "https://script.google.com/macros/s/AKfycbzV3MwVJTu7jJFBnmNBNyr7IgemWImWaqhsOuKFmYU3xFVbWr0yWbbsqeXeTt3L9Ka_Aw/exec"
+    apiUrl: "https://script.google.com/macros/s/AKfycbw98yAFBZKIFDcQvijYfyoGzLXzjZxyZ_aM9CBidJTAFAYIUZ0V06aMPh4K4euCtWh9Gw/exec"
 };

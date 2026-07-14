@@ -1,4 +1,4 @@
-const SHEET_NAME = 'счета';
+const SHEET_NAME = 'Счета';
 
 function doGet() {
   try {
@@ -11,6 +11,7 @@ function doGet() {
     const headers = rows.shift().map((header) => String(header).trim().toLowerCase());
 
     const loginIndex = findHeader(headers, ['логин', 'login']);
+    const balanceIndex = findHeader(headers, ['баланс', 'balance']);
     const balanceWithPercentIndex = findHeader(headers, [
       'баланс с процентами',
       'balance with percent',
@@ -19,15 +20,31 @@ function doGet() {
 
     const accounts = rows
       .map((row) => ({
-        login: row[loginIndex],
-        balanceWithPercent: row[balanceWithPercentIndex]
+        login: String(row[loginIndex] ?? '').trim(),
+        balance: toNumber(row[balanceIndex]),
+        balanceWithPercent: toNumber(row[balanceWithPercentIndex])
       }))
-      .filter((account) => account.login !== '' && account.login !== null);
+      .filter((account) =>
+        account.login !== '' &&
+        account.login.toLocaleLowerCase('ru-RU') !== 'зарплата' &&
+        account.balanceWithPercent !== 0
+      );
 
     return jsonResponse({ accounts });
   } catch (error) {
     return jsonResponse({ accounts: [], error: error.message });
   }
+}
+
+function toNumber(value) {
+  if (typeof value === 'number') return value;
+
+  const normalized = String(value ?? '')
+    .replace(/\s/g, '')
+    .replace(',', '.')
+    .replace(/[^\d.-]/g, '');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function findHeader(headers, names) {
